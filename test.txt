@@ -1,0 +1,2 @@
+TEST GITHUB -> D:\KowalMT2\data\me
+Jeśli widzisz ten plik po uruchomieniu update.bat, synchronizacja działa poprawnie.
