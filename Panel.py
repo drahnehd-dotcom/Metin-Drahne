@@ -5,7 +5,6 @@ import player
 import mouseModule
 import time
 import os
-import ctypes
 import chat
 
 import AutoPot
