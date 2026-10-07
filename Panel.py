@@ -825,7 +825,7 @@ class FishBotWindow(ui.BoardWithTitleBar):
 
             import re
             matches = re.findall(
-                r"FISHING_COUNT=(\\d+)",
+                r"FISHING_COUNT=(\d+)",
                 data
             )
 
@@ -1174,7 +1174,7 @@ class SettingsWindow(ui.BoardWithTitleBar):
 class MainPanel(ui.BoardWithTitleBar):
     def __init__(self):
         ui.BoardWithTitleBar.__init__(self)
-        self.SetSize(300,230); self.SetCenterPosition(); self.AddFlag("movable"); self.AddFlag("float"); self.SetTitleName("KowalMT2 Panel"); self.SetCloseEvent(self.Close)
+        self.SetSize(300,270); self.SetCenterPosition(); self.AddFlag("movable"); self.AddFlag("float"); self.SetTitleName("KowalMT2 Panel"); self.SetCloseEvent(self.Close)
         self.settings_button=_MakeButton(self,"USTAWIENIA",55,45,self.OpenSettings)
         self.close_button=_MakeButton(self,"ZAMKNIJ",55,85,self.Close)
         self.farmbot_button=_MakeButton(self,"FARMBOT",55,125,FarmBot.Open)
