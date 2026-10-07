@@ -658,6 +658,7 @@ def _StopChatAnalysis():
 # ---------------------------------------------------------------------------
 
 _FISH_NATIVE_LOG = r"D:\KowalMT2\data\me\FishNative.txt"
+_FISH_CHAT_LOG = r"D:\KowalMT2\data\me\ChatLog.txt"
 _FISH_RUNNING = False
 
 class FishBotWindow(ui.BoardWithTitleBar):
@@ -804,36 +805,54 @@ class FishBotWindow(ui.BoardWithTitleBar):
 
     def _PollNativeCount(self):
         try:
-            if not os.path.exists(_FISH_NATIVE_LOG):
-                return
-
-            size = os.path.getsize(_FISH_NATIVE_LOG)
-
-            if size < self._log_offset:
-                self._log_offset = 0
-
-            if size == self._log_offset:
-                return
-
-            f = open(_FISH_NATIVE_LOG, "r")
-            try:
-                f.seek(self._log_offset)
-                data = f.read()
-                self._log_offset = f.tell()
-            finally:
-                f.close()
-
             import re
-            matches = re.findall(
-                r"FISHING_COUNT=(\d+)",
-                data
-            )
+            sources = []
+
+            # Bezpieczna wersja DLL nie hookuje AppendChat. Liczba jest
+            # pobierana z logu Pythonowego czatu, który rejestruje faktyczny
+            # komunikat wędkarski. FishNative.txt pozostaje dodatkowym źródłem.
+            for path in (_FISH_NATIVE_LOG, _FISH_CHAT_LOG):
+                if not os.path.exists(path):
+                    continue
+                try:
+                    size = os.path.getsize(path)
+                    offset_name = "_offset_native" if path == _FISH_NATIVE_LOG else "_offset_chat"
+                    offset = getattr(self, offset_name, 0)
+                    if size < offset:
+                        offset = 0
+                    if size == offset:
+                        setattr(self, offset_name, offset)
+                        continue
+                    f = open(path, "r")
+                    try:
+                        f.seek(offset)
+                        data = f.read()
+                        offset = f.tell()
+                    finally:
+                        f.close()
+                    setattr(self, offset_name, offset)
+                    sources.append(data)
+                except:
+                    pass
+
+            if not sources:
+                return
+
+            data = "\n".join(sources)
+            matches = re.findall(r"FISHING_COUNT=(\d+)", data)
+
+            # Polski komunikat: "... %dx spację ..."
+            if not matches:
+                matches = re.findall(r"(\d+)\s*x\s*spac", data.lower())
+
+            # Awaryjnie: wpis locale 2437 z parametrem liczbowym.
+            if not matches:
+                matches = re.findall(r"2437[^0-9]{0,32}([1-9])", data)
 
             if not matches:
                 return
 
             count = int(matches[-1])
-
             if count < 1 or count > 9:
                 return
 
@@ -855,10 +874,29 @@ class FishBotWindow(ui.BoardWithTitleBar):
             self.status.SetText("STATUS: USTAW PRZYNĘTĘ")
             return
 
+        # FishBot potrzebuje tylko bezpiecznego Pythonowego hooka czatu.
+        # Nie uruchamiamy starego ctypes/native AppendChat, bo embedded Python
+        # tego klienta nie udostępnia _ctypes.
+        try:
+            if not _chat_analyzer_active:
+                _StartChatAnalysis()
+        except:
+            pass
+
         self._running = True
         self._state = "BAIT"
         self._next_action = app.GetTime()
         self._SetLogOffset()
+        self._offset_native = 0
+        self._offset_chat = 0
+        try:
+            self._offset_native = os.path.getsize(_FISH_NATIVE_LOG)
+        except:
+            pass
+        try:
+            self._offset_chat = os.path.getsize(_FISH_CHAT_LOG)
+        except:
+            pass
         self.start_button.SetText("STOP")
         self.status.SetText("STATUS: START")
         
