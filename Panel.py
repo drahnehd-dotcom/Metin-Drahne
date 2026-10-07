@@ -657,8 +657,8 @@ def _StopChatAnalysis():
 # FISH BOT
 # ---------------------------------------------------------------------------
 
-_FISH_NATIVE_LOG = r"D:\KowalMT2\data\me\FishNative.txt"
-_FISH_CHAT_LOG = r"D:\KowalMT2\data\me\ChatLog.txt"
+_FISH_IPC_NAME = "KowalMT2_FishCount"
+_FISH_IPC_SIZE = 16
 _FISH_RUNNING = False
 
 class FishBotWindow(ui.BoardWithTitleBar):
@@ -672,35 +672,20 @@ class FishBotWindow(ui.BoardWithTitleBar):
         self.SetCloseEvent(self.Close)
 
         self.bait_slot = _MakeSlot(self, 20, 42, 44)
-        self.bait_slot.SetSelectEmptySlotEvent(
-            ui.__mem_func__(self._AssignBait)
-        )
-        self.bait_slot.SetSelectItemSlotEvent(
-            ui.__mem_func__(self._AssignBait)
-        )
+        self.bait_slot.SetSelectEmptySlotEvent(ui.__mem_func__(self._AssignBait))
+        self.bait_slot.SetSelectItemSlotEvent(ui.__mem_func__(self._AssignBait))
         if hasattr(self.bait_slot, "SetUseSlotEvent"):
-            self.bait_slot.SetUseSlotEvent(
-                ui.__mem_func__(self._AssignBait)
-            )
+            self.bait_slot.SetUseSlotEvent(ui.__mem_func__(self._AssignBait))
 
         _MakeLabel(self, "PRZYNĘTA", 76, 45)
         self.bait_info = _MakeLabel(self, "Przeciągnij przynętę z EQ", 76, 64)
 
-        self.start_button = _MakeButton(
-            self, "START", 20, 100, self.Toggle, 150
-        )
-        self.close_button = _MakeButton(
-            self, "ZAMKNIJ", 185, 100, self.Close, 150
-        )
+        self.start_button = _MakeButton(self, "START", 20, 100, self.Toggle, 150)
+        self.close_button = _MakeButton(self, "ZAMKNIJ", 185, 100, self.Close, 150)
 
         self.status = _MakeLabel(self, "STATUS: STOP", 20, 145)
         self.count_label = _MakeLabel(self, "SPACE: -", 20, 166)
-        self.info = _MakeLabel(
-            self,
-            "DLL przechwytuje [LS;2437;2/3]",
-            20,
-            190
-        )
+        self.info = _MakeLabel(self, "DLL IPC -> FishBot | 2437 = 2/3 SPACE", 20, 190)
 
         self._bait_slot = -1
         self._bait_vnum = 0
@@ -710,18 +695,37 @@ class FishBotWindow(ui.BoardWithTitleBar):
         self._space_left = 0
         self._next_space = 0.0
         self._last_count = 0
-        self._log_offset = 0
-        self._last_poll = 0.0
+        self._fish_ipc = None
+        self._fish_ipc_sequence = 0
 
-        self._SetLogOffset()
         self._Refresh()
         self.Show()
 
-    def _SetLogOffset(self):
+    def _OpenFishIPC(self):
+        if self._fish_ipc is not None:
+            return True
         try:
-            self._log_offset = os.path.getsize(_FISH_NATIVE_LOG)
+            import mmap
+            self._fish_ipc = mmap.mmap(
+                -1,
+                _FISH_IPC_SIZE,
+                tagname=_FISH_IPC_NAME,
+                access=mmap.ACCESS_READ
+            )
+            self._fish_ipc_sequence = 0
+            return True
         except:
-            self._log_offset = 0
+            self._fish_ipc = None
+            return False
+
+    def _CloseFishIPC(self):
+        if self._fish_ipc is not None:
+            try:
+                self._fish_ipc.close()
+            except:
+                pass
+        self._fish_ipc = None
+        self._fish_ipc_sequence = 0
 
     def _GetAttachedBait(self):
         slot, vnum, count = _GetAttachedItem()
@@ -731,20 +735,15 @@ class FishBotWindow(ui.BoardWithTitleBar):
 
     def _AssignBait(self, _slot_index=0):
         slot, vnum = self._GetAttachedBait()
-
         if slot >= 0:
             self._bait_slot = slot
             self._bait_vnum = vnum
             try:
                 self.bait_slot.ClearSlot(0)
-                self.bait_slot.SetItemSlot(
-                    0, vnum, player.GetItemCount(slot)
-                )
+                self.bait_slot.SetItemSlot(0, vnum, player.GetItemCount(slot))
             except:
                 pass
-            self.bait_info.SetText(
-                "EQ slot %d | VNUM %d" % (slot, vnum)
-            )
+            self.bait_info.SetText("EQ slot %d | VNUM %d" % (slot, vnum))
             try:
                 mouseModule.mouseController.DeattachObject()
             except:
@@ -784,15 +783,10 @@ class FishBotWindow(ui.BoardWithTitleBar):
 
     def _PressSpace(self):
         global _game_window_instance
-
         if _game_window_instance is None:
             return False
-
         try:
-            _original_on_key_down(
-                _game_window_instance,
-                app.DIK_SPACE
-            )
+            _original_on_key_down(_game_window_instance, app.DIK_SPACE)
             return True
         except:
             return False
@@ -803,65 +797,32 @@ class FishBotWindow(ui.BoardWithTitleBar):
         self._next_space = app.GetTime()
         self._state = "PRESS_SPACE"
 
-    def _PollNativeCount(self):
+    def _PollFishIPC(self):
         try:
-            import re
-            sources = []
-
-            # Bezpieczna wersja DLL nie hookuje AppendChat. Liczba jest
-            # pobierana z logu Pythonowego czatu, który rejestruje faktyczny
-            # komunikat wędkarski. FishNative.txt pozostaje dodatkowym źródłem.
-            for path in (_FISH_NATIVE_LOG, _FISH_CHAT_LOG):
-                if not os.path.exists(path):
-                    continue
-                try:
-                    size = os.path.getsize(path)
-                    offset_name = "_offset_native" if path == _FISH_NATIVE_LOG else "_offset_chat"
-                    offset = getattr(self, offset_name, 0)
-                    if size < offset:
-                        offset = 0
-                    if size == offset:
-                        setattr(self, offset_name, offset)
-                        continue
-                    f = open(path, "r")
-                    try:
-                        f.seek(offset)
-                        data = f.read()
-                        offset = f.tell()
-                    finally:
-                        f.close()
-                    setattr(self, offset_name, offset)
-                    sources.append(data)
-                except:
-                    pass
-
-            if not sources:
+            import struct
+            if not self._OpenFishIPC():
                 return
 
-            data = "\n".join(sources)
-            matches = re.findall(r"FISHING_COUNT=(\d+)", data)
-
-            # Polski komunikat: "... %dx spację ..."
-            if not matches:
-                matches = re.findall(r"(\d+)\s*x\s*spac", data.lower())
-
-            # Awaryjnie: wpis locale 2437 z parametrem liczbowym.
-            if not matches:
-                matches = re.findall(r"2437[^0-9]{0,32}([1-9])", data)
-
-            if not matches:
+            self._fish_ipc.seek(0)
+            raw = self._fish_ipc.read(_FISH_IPC_SIZE)
+            if len(raw) != _FISH_IPC_SIZE:
                 return
 
-            count = int(matches[-1])
+            magic, version, sequence, count = struct.unpack("<IIII", raw)
+            if magic != 0x46495348 or version != 1:
+                return
+            if sequence == 0 or sequence == self._fish_ipc_sequence:
+                return
+
+            self._fish_ipc_sequence = sequence
             if count < 1 or count > 9:
                 return
 
-            self._last_count = count
-            self.count_label.SetText("SPACE: %d" % count)
+            self._last_count = int(count)
+            self.count_label.SetText("SPACE: %d" % self._last_count)
 
             if self._running and self._state == "WAIT_COUNT":
-                self._QueueSpaces(count)
-
+                self._QueueSpaces(self._last_count)
         except:
             pass
 
@@ -874,32 +835,17 @@ class FishBotWindow(ui.BoardWithTitleBar):
             self.status.SetText("STATUS: USTAW PRZYNĘTĘ")
             return
 
-        # FishBot potrzebuje tylko bezpiecznego Pythonowego hooka czatu.
-        # Nie uruchamiamy starego ctypes/native AppendChat, bo embedded Python
-        # tego klienta nie udostępnia _ctypes.
-        try:
-            if not _chat_analyzer_active:
-                _StartChatAnalysis()
-        except:
-            pass
+        if not self._OpenFishIPC():
+            self.status.SetText("STATUS: BRAK DLL IPC")
+            return
 
         self._running = True
         self._state = "BAIT"
         self._next_action = app.GetTime()
-        self._SetLogOffset()
-        self._offset_native = 0
-        self._offset_chat = 0
-        try:
-            self._offset_native = os.path.getsize(_FISH_NATIVE_LOG)
-        except:
-            pass
-        try:
-            self._offset_chat = os.path.getsize(_FISH_CHAT_LOG)
-        except:
-            pass
+        self._space_left = 0
         self.start_button.SetText("STOP")
         self.status.SetText("STATUS: START")
-        
+
     def _Stop(self, reason="STOP"):
         self._running = False
         self._state = "STOP"
@@ -912,7 +858,7 @@ class FishBotWindow(ui.BoardWithTitleBar):
             return
 
         now = app.GetTime()
-        self._PollNativeCount()
+        self._PollFishIPC()
 
         if self._state == "BAIT":
             if now >= self._next_action:
@@ -923,9 +869,6 @@ class FishBotWindow(ui.BoardWithTitleBar):
 
         if self._state == "CAST":
             if now >= self._next_action:
-                # Pierwsze SPACE uruchamia akcję łowienia w kliencie.
-                # Kolejne SPACE są już dokładnie wartością przechwyconą
-                # przez FishNative.
                 self._PressSpace()
                 self._state = "WAIT_COUNT"
                 self._next_action = now + 15.0
@@ -960,9 +903,7 @@ class FishBotWindow(ui.BoardWithTitleBar):
             if self._bait_slot >= 0 and self._BaitValid():
                 self.bait_slot.ClearSlot(0)
                 self.bait_slot.SetItemSlot(
-                    0,
-                    self._bait_vnum,
-                    player.GetItemCount(self._bait_slot)
+                    0, self._bait_vnum, player.GetItemCount(self._bait_slot)
                 )
         except:
             pass
@@ -970,6 +911,7 @@ class FishBotWindow(ui.BoardWithTitleBar):
     def Close(self):
         global _fishbot
         self._Stop("STOP")
+        self._CloseFishIPC()
         _fishbot = None
         self.Hide()
 
