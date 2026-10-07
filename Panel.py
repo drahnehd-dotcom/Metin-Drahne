@@ -332,7 +332,11 @@ def _StartMseAnalysis():
             f.close()
     except:
         pass
-    _InstallMseHooks()
+    installed = _InstallMseHooks()
+    _MseWrite(
+        "START hooks=%s" % (", ".join(_mse_hooks) if installed else "BRAK_PYTHONOWYCH_HOOKOW"),
+        "MSE"
+    )
     if _analyzer:
         _analyzer._Refresh()
 
@@ -368,6 +372,28 @@ def _ChatSafeText(value):
     except:
         return "<nieznany>"
 
+def _FishSpaceHint(text):
+    # Diagnostyka: komunikat Wedkarstwo pokazuje liczbe SPACE.
+    # To tylko korelacja diagnostyczna, nie dowod powiazania z MSE.
+    try:
+        import re
+        value = _ChatSafeText(text)
+        low = value.lower()
+        if "wędkarstwo" not in low and "wedkarstwo" not in low:
+            return
+        match = re.search(r"(\d+)\s*x\s*spac", low)
+        if not match:
+            return
+        count = int(match.group(1))
+        if count < 1 or count > 9:
+            return
+        _MseWrite(
+            "FISH_CHAT_HINT count=%d candidate=fish/%d.mse" % (count, count),
+            value
+        )
+    except:
+        pass
+
 def _ChatWrite(kind, args):
     global _chat_log_count
     if not _chat_analyzer_active:
@@ -376,6 +402,8 @@ def _ChatWrite(kind, args):
         parts = []
         for value in args:
             parts.append(_ChatSafeText(value))
+            if _mse_analyzer_active:
+                _FishSpaceHint(value)
         line = "[%s] [%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), kind, " | ".join(parts))
         folder = os.path.dirname(_chat_log_file)
         if folder and not os.path.exists(folder):
@@ -701,7 +729,7 @@ class ChatAnalyzerWindow(ui.BoardWithTitleBar):
         self.mse_status = _MakeLabel(self, "MSE: STOP", 250, 88)
         self.mse_count = _MakeLabel(self, "MSE: 0", 250, 110)
 
-        self.mse_info = _MakeLabel(self, "MSE zapisuje tylko wykryte sciezki *.mse.", 20, 145)
+        self.mse_info = _MakeLabel(self, "MSE: sciezki *.mse + korelacja 1x/2x/3x...", 20, 145)
         self.mse_path = _MakeLabel(self, "PLIK: " + _mse_log_file, 20, 165)
 
         self.start_button = _MakeButton(self, "START CZAT", 20, 205, self.Start, 115)
