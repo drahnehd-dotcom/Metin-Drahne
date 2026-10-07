@@ -6,6 +6,7 @@ import mouseModule
 import time
 import os
 import chat
+import net
 
 import AutoPot
 import Pickup
@@ -24,6 +25,8 @@ _settings = None
 _booster_editor = None
 _skill_editor = None
 _analyzer = None
+_fishbot = None
+_game_window_instance = None
 
 _chat_original_append = None
 _chat_original_whisper = None
@@ -649,6 +652,292 @@ def _StopChatAnalysis():
     if _analyzer:
         _analyzer._Refresh()
 
+
+# ---------------------------------------------------------------------------
+# FISH BOT
+# ---------------------------------------------------------------------------
+
+_FISH_NATIVE_LOG = r"D:\KowalMT2\data\me\FishNative.txt"
+_FISH_RUNNING = False
+
+class FishBotWindow(ui.BoardWithTitleBar):
+    def __init__(self):
+        ui.BoardWithTitleBar.__init__(self)
+        self.SetSize(360, 245)
+        self.SetCenterPosition()
+        self.AddFlag("movable")
+        self.AddFlag("float")
+        self.SetTitleName("Fish Bot")
+        self.SetCloseEvent(self.Close)
+
+        self.bait_slot = _MakeSlot(self, 20, 42, 44)
+        self.bait_slot.SetSelectEmptySlotEvent(
+            ui.__mem_func__(self._AssignBait)
+        )
+        self.bait_slot.SetSelectItemSlotEvent(
+            ui.__mem_func__(self._AssignBait)
+        )
+        if hasattr(self.bait_slot, "SetUseSlotEvent"):
+            self.bait_slot.SetUseSlotEvent(
+                ui.__mem_func__(self._AssignBait)
+            )
+
+        _MakeLabel(self, "PRZYNĘTA", 76, 45)
+        self.bait_info = _MakeLabel(self, "Przeciągnij przynętę z EQ", 76, 64)
+
+        self.start_button = _MakeButton(
+            self, "START", 20, 100, self.Toggle, 150
+        )
+        self.close_button = _MakeButton(
+            self, "ZAMKNIJ", 185, 100, self.Close, 150
+        )
+
+        self.status = _MakeLabel(self, "STATUS: STOP", 20, 145)
+        self.count_label = _MakeLabel(self, "SPACE: -", 20, 166)
+        self.info = _MakeLabel(
+            self,
+            "DLL przechwytuje [LS;2437;2/3]",
+            20,
+            190
+        )
+
+        self._bait_slot = -1
+        self._bait_vnum = 0
+        self._running = False
+        self._state = "STOP"
+        self._next_action = 0.0
+        self._space_left = 0
+        self._next_space = 0.0
+        self._last_count = 0
+        self._log_offset = 0
+        self._last_poll = 0.0
+
+        self._SetLogOffset()
+        self._Refresh()
+        self.Show()
+
+    def _SetLogOffset(self):
+        try:
+            self._log_offset = os.path.getsize(_FISH_NATIVE_LOG)
+        except:
+            self._log_offset = 0
+
+    def _GetAttachedBait(self):
+        slot, vnum, count = _GetAttachedItem()
+        if slot < 0 or vnum <= 0 or count <= 0:
+            return -1, 0
+        return slot, vnum
+
+    def _AssignBait(self, _slot_index=0):
+        slot, vnum = self._GetAttachedBait()
+
+        if slot >= 0:
+            self._bait_slot = slot
+            self._bait_vnum = vnum
+            try:
+                self.bait_slot.ClearSlot(0)
+                self.bait_slot.SetItemSlot(
+                    0, vnum, player.GetItemCount(slot)
+                )
+            except:
+                pass
+            self.bait_info.SetText(
+                "EQ slot %d | VNUM %d" % (slot, vnum)
+            )
+            try:
+                mouseModule.mouseController.DeattachObject()
+            except:
+                pass
+            return
+
+        if self._bait_vnum > 0:
+            self._bait_slot = -1
+            self._bait_vnum = 0
+            try:
+                self.bait_slot.ClearSlot(0)
+            except:
+                pass
+            self.bait_info.SetText("Przeciągnij przynętę z EQ")
+
+    def _BaitValid(self):
+        if self._bait_slot < 0 or self._bait_vnum <= 0:
+            return False
+        try:
+            return (
+                player.GetItemIndex(self._bait_slot) == self._bait_vnum
+                and player.GetItemCount(self._bait_slot) > 0
+            )
+        except:
+            return False
+
+    def _UseBait(self):
+        if not self._BaitValid():
+            self._Stop("BRAK PRZYNĘTY")
+            return False
+        try:
+            net.SendItemUsePacket(self._bait_slot)
+            return True
+        except:
+            self._Stop("BŁĄD UŻYCIA PRZYNĘTY")
+            return False
+
+    def _PressSpace(self):
+        global _game_window_instance
+
+        if _game_window_instance is None:
+            return False
+
+        try:
+            _original_on_key_down(
+                _game_window_instance,
+                app.DIK_SPACE
+            )
+            return True
+        except:
+            return False
+
+    def _QueueSpaces(self, count):
+        count = max(1, min(9, int(count)))
+        self._space_left = count
+        self._next_space = app.GetTime()
+        self._state = "PRESS_SPACE"
+
+    def _PollNativeCount(self):
+        try:
+            if not os.path.exists(_FISH_NATIVE_LOG):
+                return
+
+            size = os.path.getsize(_FISH_NATIVE_LOG)
+
+            if size < self._log_offset:
+                self._log_offset = 0
+
+            if size == self._log_offset:
+                return
+
+            f = open(_FISH_NATIVE_LOG, "r")
+            try:
+                f.seek(self._log_offset)
+                data = f.read()
+                self._log_offset = f.tell()
+            finally:
+                f.close()
+
+            import re
+            matches = re.findall(
+                r"FISHING_COUNT=(\\d+)",
+                data
+            )
+
+            if not matches:
+                return
+
+            count = int(matches[-1])
+
+            if count < 1 or count > 9:
+                return
+
+            self._last_count = count
+            self.count_label.SetText("SPACE: %d" % count)
+
+            if self._running and self._state == "WAIT_COUNT":
+                self._QueueSpaces(count)
+
+        except:
+            pass
+
+    def Toggle(self):
+        if self._running:
+            self._Stop("STOP")
+            return
+
+        if not self._BaitValid():
+            self.status.SetText("STATUS: USTAW PRZYNĘTĘ")
+            return
+
+        self._running = True
+        self._state = "BAIT"
+        self._next_action = app.GetTime()
+        self._SetLogOffset()
+        self.start_button.SetText("STOP")
+        self.status.SetText("STATUS: START")
+        
+    def _Stop(self, reason="STOP"):
+        self._running = False
+        self._state = "STOP"
+        self._space_left = 0
+        self.start_button.SetText("START")
+        self.status.SetText("STATUS: " + str(reason))
+
+    def OnUpdate(self):
+        if not self._running:
+            return
+
+        now = app.GetTime()
+        self._PollNativeCount()
+
+        if self._state == "BAIT":
+            if now >= self._next_action:
+                if self._UseBait():
+                    self._state = "CAST"
+                    self._next_action = now + 0.35
+            return
+
+        if self._state == "CAST":
+            if now >= self._next_action:
+                # Pierwsze SPACE uruchamia akcję łowienia w kliencie.
+                # Kolejne SPACE są już dokładnie wartością przechwyconą
+                # przez FishNative.
+                self._PressSpace()
+                self._state = "WAIT_COUNT"
+                self._next_action = now + 15.0
+            return
+
+        if self._state == "WAIT_COUNT":
+            if now >= self._next_action:
+                self._Stop("TIMEOUT")
+            return
+
+        if self._state == "PRESS_SPACE":
+            if self._space_left <= 0:
+                self._state = "WAIT_RESULT"
+                self._next_action = now + 4.0
+                return
+
+            if now >= self._next_space:
+                if self._PressSpace():
+                    self._space_left -= 1
+                    self._next_space = now + 0.025
+                else:
+                    self._Stop("BŁĄD SPACE")
+            return
+
+        if self._state == "WAIT_RESULT":
+            if now >= self._next_action:
+                self._state = "BAIT"
+                self._next_action = now
+
+    def _Refresh(self):
+        try:
+            if self._bait_slot >= 0 and self._BaitValid():
+                self.bait_slot.ClearSlot(0)
+                self.bait_slot.SetItemSlot(
+                    0,
+                    self._bait_vnum,
+                    player.GetItemCount(self._bait_slot)
+                )
+        except:
+            pass
+
+    def Close(self):
+        global _fishbot
+        self._Stop("STOP")
+        _fishbot = None
+        self.Hide()
+
+    def Destroy(self):
+        self.Close()
+
 class BoosterEditor(ui.BoardWithTitleBar):
     def __init__(self):
         ui.BoardWithTitleBar.__init__(self)
@@ -889,12 +1178,20 @@ class MainPanel(ui.BoardWithTitleBar):
         self.settings_button=_MakeButton(self,"USTAWIENIA",55,45,self.OpenSettings)
         self.close_button=_MakeButton(self,"ZAMKNIJ",55,85,self.Close)
         self.farmbot_button=_MakeButton(self,"FARMBOT",55,125,FarmBot.Open)
-        self.analysis_button=_MakeButton(self,"ANALIZA",55,165,self.OpenAnalyzer)
+        self.fishbot_button=_MakeButton(self,"FISH BOT",55,165,self.OpenFishBot)
+        self.analysis_button=_MakeButton(self,"ANALIZA",55,205,self.OpenAnalyzer)
         self.Show()
     def OpenSettings(self):
         global _settings
         if _settings: _settings.SetTop(); return
         _settings=SettingsWindow()
+    def OpenFishBot(self):
+        global _fishbot
+        if _fishbot:
+            _fishbot.SetTop()
+            return
+        _fishbot=FishBotWindow()
+
     def OpenAnalyzer(self):
         global _analyzer
         if _analyzer: _analyzer.SetTop(); return
@@ -915,6 +1212,8 @@ def _OnKeyDown(self,key):
     return False
 
 def _OnUpdate(self):
+    global _game_window_instance
+    _game_window_instance = self
     _EnsureChatHooks()
     if _original_on_update: _original_on_update(self)
     try: AutoPot.Update()
@@ -929,6 +1228,11 @@ def _OnUpdate(self):
     except: pass
     try: FarmBot.Update()
     except: pass
+    try:
+        if _fishbot:
+            _fishbot.OnUpdate()
+    except:
+        pass
 
 _original_on_key_down=game.GameWindow.OnKeyDown
 game.GameWindow.OnKeyDown=_OnKeyDown
