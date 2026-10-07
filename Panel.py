@@ -38,6 +38,7 @@ _mse_analyzer_active = False
 _mse_log_file = r"D:\KowalMT2\data\me\MSELog.txt"
 _mse_log_count = 0
 _mse_hooks = []
+_mse_chat_hook_owned = False
 
 # Natywny logger czatu dla tego konkretnego KowalMT2.exe.
 _NATIVE_CHAT_APPEND_RVA = 0x39F840
@@ -318,6 +319,7 @@ def _RemoveMseHooks():
 def _StartMseAnalysis():
     global _mse_analyzer_active
     global _mse_log_count
+    global _mse_chat_hook_owned
     _mse_log_count = 0
     _mse_analyzer_active = True
     try:
@@ -337,12 +339,28 @@ def _StartMseAnalysis():
         "START hooks=%s" % (", ".join(_mse_hooks) if installed else "BRAK_PYTHONOWYCH_HOOKOW"),
         "MSE"
     )
+
+    # MSE-only test: automatically enable the Python chat fallback so the
+    # fishing message can be correlated without pressing START CZAT.
+    if not _chat_analyzer_active:
+        if _InstallChatHooks():
+            _mse_chat_hook_owned = True
+            _MseWrite("CHAT_CORRELATION=ON", "MSE")
+        else:
+            _MseWrite("CHAT_CORRELATION=FAILED", "MSE")
     if _analyzer:
         _analyzer._Refresh()
 
 def _StopMseAnalysis():
     global _mse_analyzer_active
+    global _mse_chat_hook_owned
     _mse_analyzer_active = False
+    if _mse_chat_hook_owned:
+        try:
+            _RemoveChatHooks()
+        except:
+            pass
+        _mse_chat_hook_owned = False
     try:
         _MseWrite("===== STOP SKANERA MSE =====", "MSE")
     except:
