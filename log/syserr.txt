@@ -1,16 +1,5 @@
-1007 15:43:02681 :: [KowalMT2] External Python bootstrap failed:
-1007 15:43:02724 :: Traceback (most recent call last):
-  File "system.py", line 482, in _LoadExternalPythonBootstrap
-  File "D:\KowalMT2\data\me\path.py", line 1, in <module>
-    import Panel
-  File "system.py", line 308, in __hybrid_import
-  File "D:\KowalMT2\data\me\Panel.py", line 8, in <module>
-    import ctypes
-  File "system.py", line 308, in __hybrid_import
-  File "D:\KowalMT2\lib\ctypes\__init__.py", line 8, in <module>
-    from _ctypes import Union, Structure, Array
-  File "system.py", line 308, in __hybrid_import
-ModuleNotFoundError: No module named '_ctypes'
-
-1007 15:43:12599 :: rendertargetSetVisibility: missing render target index 10
-1007 15:43:12702 :: rendertargetSetVisibility: missing render target index 7
+1007 15:58:02589 :: [MAP_TP] MODUL ZAINSTALOWANY - Shift+LPM na mapie M aktywne
+1007 15:58:02591 :: [METINY_BOSY] callbacki BINARY odblokowane
+1007 15:58:02591 :: [METINY_BOSY] MODUL ZAINSTALOWANY - F8 aktywne
+1007 15:59:28471 :: rendertargetSetVisibility: missing render target index 10
+1007 15:59:28575 :: rendertargetSetVisibility: missing render target index 7

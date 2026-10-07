@@ -1,25 +1,6 @@
-
-===== START ANALIZY CZATU 2026-10-06 23:36:04 =====
-[2026-10-06 23:36:04] [ANALIZA] START
-===== STOP ANALIZY CZATU 2026-10-06 23:36:21 =====
-[2026-10-06 23:45:57] [ANALIZA] ===== START ANALIZY CZATU 2026-10-06 23:45:57 =====
-[2026-10-06 23:45:57] [ANALIZA] HOOK ON: AppendChat, AppendChatWithDelay, AppendWhisper
-[2026-10-06 23:45:57] [ANALIZA] REJESTRACJA AKTYWNA
-[2026-10-06 23:46:14] [AppendChatWithDelay] 1 | Straciłeś przynętę. | 2000
-[2026-10-06 23:46:17] [ANALIZA] ===== STOP ANALIZY CZATU 2026-10-06 23:46:17 =====
-[2026-10-07 15:17:53] [ANALIZA] ===== START ANALIZY CZATU 2026-10-07 15:17:53 =====
-[2026-10-07 15:17:53] [ANALIZA] HOOK ON: AppendChat, AppendChatWithDelay, AppendWhisper
-[2026-10-07 15:17:53] [ANALIZA] REJESTRACJA AKTYWNA
-[2026-10-07 15:18:10] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:10] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:11] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:11] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:11] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:11] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:15] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:15] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:16] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:16] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:16] [AppendChat] 1 | Nie możesz podnieść tego Przedmiotu, nie ty go zdobyłeś.
-[2026-10-07 15:18:43] [AppendChat] 1 | Jesteś połączony z kanałem 0.
-[2026-10-07 15:19:09] [AppendChatWithDelay] 1 | Zdobyłeś Gromadnik! | 2000
+[2026-10-07 15:59:53] [ANALIZA] ===== STOP ANALIZY CZATU 2026-10-07 15:59:53 =====
+[2026-10-07 15:59:55] [ANALIZA] ===== START ANALIZY CZATU 2026-10-07 15:59:55 =====
+[2026-10-07 15:59:55] [ANALIZA_NATIVE_ERROR] name 'ctypes' is not defined
+[2026-10-07 15:59:55] [ANALIZA] FALLBACK PYTHON HOOK: AppendChat, AppendChatWithDelay, AppendWhisper
+[2026-10-07 15:59:55] [ANALIZA] REJESTRACJA NATIVE AKTYWNA
+[2026-10-07 15:59:55] [ANALIZA_NATIVE_ERROR] name 'ctypes' is not defined
